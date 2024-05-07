@@ -3,10 +3,10 @@ package noderesourcematch
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 )
@@ -74,7 +74,11 @@ func (nrm *NodeResourceMatch) Filter(ctx context.Context, cycleState *framework.
 		return framework.AsStatus(err)
 	}
 
-	insufficientResources := fitsRequest(s, nodeInfo)
+	insufficientResources, fitserr := fitsRequest(s, nodeInfo)
+	if fitserr != nil {
+		//! 这里不确定会对后续调度行为产生什么具体的后果
+		return framework.NewStatus(framework.Error, "error when get insufficientResources")
+	}
 
 	if len(insufficientResources) != 0 {
 		// We will keep all failure reasons.
@@ -107,7 +111,7 @@ func getPreFilterState(cycleState *framework.CycleState) (*preFilterState, error
 	return s, nil
 }
 
-func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo) []InsufficientResource {
+func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo) ([]InsufficientResource, error) {
 	insufficientResources := make([]InsufficientResource, 0, 4)
 
 	// 检查最大Pod限制
@@ -124,10 +128,13 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo) []Ins
 
 	if podRequest.MilliCPU == 0 && podRequest.Memory == 0 &&
 		podRequest.EphemeralStorage == 0 && len(podRequest.ScalarResources) == 0 {
-		return insufficientResources
+		return insufficientResources, nil
 	}
 
-	Reserved := GetReservedResources(nodeInfo)
+	Reserved, err := GetReservedResources(nodeInfo)
+	if err != nil {
+		return insufficientResources, nil
+	}
 	// 检查CPU余量，考虑预留资源
 	if podRequest.MilliCPU > (nodeInfo.Allocatable.MilliCPU - nodeInfo.Requested.MilliCPU - Reserved.MilliCPU) {
 		insufficientResources = append(insufficientResources, InsufficientResource{
@@ -158,10 +165,10 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo) []Ins
 		})
 	}
 
-	return insufficientResources
+	return insufficientResources, nil
 }
 
-func GetReservedResources(nodeInfo *framework.NodeInfo) *framework.Resource {
+func GetReservedResources(nodeInfo *framework.NodeInfo) (*framework.Resource, error) {
 	// Get reserved resources from node annotations
 	reservedResources := &framework.Resource{}
 	node := nodeInfo.Node()
@@ -171,32 +178,34 @@ func GetReservedResources(nodeInfo *framework.NodeInfo) *framework.Resource {
 			continue
 		}
 		// Parse the annotation value
-		rName, rQuant, _ := parseReserveAnnotation(k, v)
+		rName, rQuant, _, err := parseReserveAnnotation(k, v)
+		if err != nil {
+			return reservedResources, err
+		}
 		// 这里假设value符合各种资源类型用量的单位标准
 		switch rName {
 		case v1.ResourceCPU:
-			reservedResources.MilliCPU += rQuant
+			reservedResources.MilliCPU += rQuant.MilliValue()
 		case v1.ResourceMemory:
-			reservedResources.Memory += rQuant
+			reservedResources.Memory += rQuant.Value()
 		case v1.ResourceEphemeralStorage:
-			reservedResources.EphemeralStorage += rQuant
+			reservedResources.EphemeralStorage += rQuant.Value()
 		}
 	}
-	return reservedResources
+	return reservedResources, nil
 }
 
 func IsReserveAnnotation(key string) bool {
 	return key[:8] == "reserve."
 }
 
-func parseReserveAnnotation(key, value string) (v1.ResourceName, int64, string) {
+func parseReserveAnnotation(key, value string) (v1.ResourceName, resource.Quantity, string, error) {
 	var rName v1.ResourceName
-	var rQuant int64
-	if value == "" {
-		rQuant = int64(0)
-	} else {
-		rQuant, _ = strconv.ParseInt(value, 10, 64)
+	rQuant, err := resource.ParseQuantity(value)
+	if err != nil {
+		return rName, rQuant, "", err
 	}
+
 	parts := strings.Split(key, "/")
 	resourceType := parts[0]
 	rOwnerUid := parts[1]
@@ -209,7 +218,7 @@ func parseReserveAnnotation(key, value string) (v1.ResourceName, int64, string) 
 		rName = v1.ResourceEphemeralStorage
 	}
 
-	return rName, rQuant, rOwnerUid
+	return rName, rQuant, rOwnerUid, nil
 }
 
 func New(configuration runtime.Object, h framework.Handle) (framework.Plugin, error) {

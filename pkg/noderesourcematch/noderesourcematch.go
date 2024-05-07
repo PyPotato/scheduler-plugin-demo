@@ -45,7 +45,29 @@ func (nrm *NodeResourceMatch) Name() string {
 	return Name
 }
 
-// 按道理，执行到自定义Filter插件的时候，in-tree的PreFilter插件已经执行完了，所以节点的资源状态认为已经有了
+func (nrm *NodeResourceMatch) PreFilter(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod) (*framework.PreFilterResult, *framework.Status) {
+	cycleState.Write(preFilterStateKey, computePodResourceRequest(pod))
+	return nil, nil
+}
+
+func computePodResourceRequest(pod *v1.Pod) *preFilterState {
+	result := &preFilterState{}
+	for _, container := range pod.Spec.Containers {
+		result.Add(container.Resources.Requests)
+	}
+	// take max_resource(sum_pod, any_init_container)
+	for _, container := range pod.Spec.InitContainers {
+		result.SetMaxResource(container.Resources.Requests)
+	}
+
+	// If Overhead is being utilized, add to the total requests for the pod
+	if pod.Spec.Overhead != nil {
+		result.Add(pod.Spec.Overhead)
+	}
+	return result
+}
+
+// 按道理，执行到自定义Filter插件的时候，in-tree的PreFilter插件已经执行完了，所以节点的资源状态(NodeInfo)认为已经有了
 func (nrm *NodeResourceMatch) Filter(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
 	s, err := getPreFilterState(cycleState)
 	if err != nil {

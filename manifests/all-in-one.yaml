@@ -122,6 +122,27 @@ rules:
       - create
       - patch
       - update
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - list
+      - watch
+  - apiGroups:
+      - "storage.k8s.io"
+    resources:
+      - csidrivers
+    verbs:
+      - list
+      - watch
+  - apiGroups:
+      - "storage.k8s.io"
+    resources:
+      - csistoragecapacities
+    verbs:
+      - list
+      - watch
 ---
 # 2. 创建ServiceAccount--test-scheduler-sa
 apiVersion: v1
@@ -158,8 +179,6 @@ data:
     kind: KubeSchedulerConfiguration
     leaderElection:
       leaderElect: false
-    clientConnection:
-      kubeconfig: "/etc/kubernetes/scheduler.conf"
     profiles:
     - schedulerName: test-scheduler
       plugins:
@@ -201,7 +220,6 @@ spec:
           image: registry.cn-hangzhou.aliyuncs.com/zsj-dev/test-scheduler:v0.0.1
           imagePullPolicy: IfNotPresent
           args:
-            - test-scheduler-framework
             - --config=/etc/kubernetes/scheduler-config.yaml
           resources:
             requests:

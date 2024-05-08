@@ -76,6 +76,7 @@ func computePodResourceRequest(pod *v1.Pod) *preFilterState {
 
 // 按道理，执行到自定义Filter插件的时候，in-tree的PreFilter插件已经执行完了，所以节点的资源状态(NodeInfo)认为已经有了
 func (nrm *NodeResourceMatch) Filter(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+	klog.Info("Into Filter")
 	s, err := getPreFilterState(cycleState)
 	if err != nil {
 		return framework.AsStatus(err)
@@ -152,6 +153,7 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo) ([]In
 			Capacity:     nodeInfo.Allocatable.MilliCPU,
 		})
 	}
+	klog.Info("Total(Allocatable) MilliCPU: ", nodeInfo.Allocatable.MilliCPU)
 	klog.Info("podRequest MilliCPU: ", podRequest.MilliCPU)
 	klog.Info("Reserved MilliCPU: ", Reserved.MilliCPU)
 	klog.Info("Available MilliCPU: ", nodeInfo.Allocatable.MilliCPU - nodeInfo.Requested.MilliCPU - Reserved.MilliCPU)
@@ -165,6 +167,7 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo) ([]In
 			Capacity:     nodeInfo.Allocatable.Memory,
 		})
 	}
+	klog.Info("Total(Allocatable) Memory: ", nodeInfo.Allocatable.Memory)
 	klog.Info("podRequest Memory: ", podRequest.Memory)
 	klog.Info("Reserved Memory: ", Reserved.Memory)
 	klog.Info("Available Memory: ", nodeInfo.Allocatable.Memory - nodeInfo.Requested.Memory - Reserved.Memory)

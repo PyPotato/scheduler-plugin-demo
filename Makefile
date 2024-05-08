@@ -3,11 +3,11 @@ IMAGE_REGISTRY    ?= registry.cn-hangzhou.aliyuncs.com/zsj-dev
 IMAGE_NAME        ?= test-scheduler
 IMAGE_TAG         ?= v0.0.1 # 镜像的版本标签
 BINARY_NAME       ?= test-scheduler
-PKG               := ./cmd
+PKG               := /home/aiedge/github.com/scheduler-plugin-demo/cmd
 
 .PHONY: build
 build: ## 构建 Golang 项目二进制文件
-	go build -o ./bin/$(BINARY_NAME) $(PKG)
+	go build -buildvcs=false -o /home/aiedge/github.com/scheduler-plugin-demo/bin/$(BINARY_NAME) $(PKG)
 
 .PHONY: docker
 docker: ## 打包项目为 Docker 镜像

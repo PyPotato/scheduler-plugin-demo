@@ -1,0 +1,15 @@
+apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+leaderElection:
+  leaderElect: false
+clientConnection:
+  kubeconfig: "/etc/kubernetes/scheduler.conf"
+profiles:
+- schedulerName: test-scheduler
+  plugins:
+    preFilter:
+      enabled:
+      - name: noderesourcematch-plugin
+    filter:
+      enabled:
+      - name: noderesourcematch-plugin

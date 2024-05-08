@@ -8,6 +8,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 )
 
@@ -40,12 +41,18 @@ type InsufficientResource struct {
 }
 
 var _ = framework.FilterPlugin(&NodeResourceMatch{})
+var _ = framework.PreFilterPlugin(&NodeResourceMatch{})
 
 func (nrm *NodeResourceMatch) Name() string {
 	return Name
 }
 
+func (nrm *NodeResourceMatch) PreFilterExtensions() framework.PreFilterExtensions {
+	return nil
+}
+
 func (nrm *NodeResourceMatch) PreFilter(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod) (*framework.PreFilterResult, *framework.Status) {
+	klog.Info("Writing SycleState of ", preFilterStateKey)
 	cycleState.Write(preFilterStateKey, computePodResourceRequest(pod))
 	return nil, nil
 }
@@ -145,6 +152,9 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo) ([]In
 			Capacity:     nodeInfo.Allocatable.MilliCPU,
 		})
 	}
+	klog.Info("podRequest MilliCPU: ", podRequest.MilliCPU)
+	klog.Info("Reserved MilliCPU: ", Reserved.MilliCPU)
+	klog.Info("Available MilliCPU: ", nodeInfo.Allocatable.MilliCPU - nodeInfo.Requested.MilliCPU - Reserved.MilliCPU)
 	// 检查内存
 	if podRequest.Memory > (nodeInfo.Allocatable.Memory - nodeInfo.Requested.Memory - Reserved.Memory) {
 		insufficientResources = append(insufficientResources, InsufficientResource{
@@ -155,6 +165,9 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo) ([]In
 			Capacity:     nodeInfo.Allocatable.Memory,
 		})
 	}
+	klog.Info("podRequest Memory: ", podRequest.Memory)
+	klog.Info("Reserved Memory: ", Reserved.Memory)
+	klog.Info("Available Memory: ", nodeInfo.Allocatable.Memory - nodeInfo.Requested.Memory - Reserved.Memory)
 	if podRequest.EphemeralStorage > (nodeInfo.Allocatable.EphemeralStorage - nodeInfo.Requested.EphemeralStorage - Reserved.EphemeralStorage) {
 		insufficientResources = append(insufficientResources, InsufficientResource{
 			ResourceName: v1.ResourceEphemeralStorage,
@@ -170,6 +183,7 @@ func fitsRequest(podRequest *preFilterState, nodeInfo *framework.NodeInfo) ([]In
 
 func GetReservedResources(nodeInfo *framework.NodeInfo) (*framework.Resource, error) {
 	// Get reserved resources from node annotations
+	klog.Info("Collecting reserved resources")
 	reservedResources := &framework.Resource{}
 	node := nodeInfo.Node()
 	// Select all annotations whose key is "reserve.{resource-type}/{owner-uid}"
@@ -185,10 +199,13 @@ func GetReservedResources(nodeInfo *framework.NodeInfo) (*framework.Resource, er
 		// 这里假设value符合各种资源类型用量的单位标准
 		switch rName {
 		case v1.ResourceCPU:
+			klog.Info("Reserving cpu: ", rQuant.MilliValue())
 			reservedResources.MilliCPU += rQuant.MilliValue()
 		case v1.ResourceMemory:
+			klog.Info("Reserving memory: ", rQuant.Value())
 			reservedResources.Memory += rQuant.Value()
 		case v1.ResourceEphemeralStorage:
+			klog.Info("Reserving ephemeralStorage: ", rQuant.Value())
 			reservedResources.EphemeralStorage += rQuant.Value()
 		}
 	}

@@ -167,7 +167,7 @@ subjects:
     namespace: kube-system
 
 ---
-# 4. 创建ConfigMap--scheduler-config.yaml 指定插件test-plugin分别在PreFilter、Filter、PreBind 三个扩展点的启用
+# 4. 创建ConfigMap--scheduler-config.yaml 指定插件test-plugin分别在PreFilter、Filter两个扩展点的启用
 apiVersion: v1
 kind: ConfigMap
 metadata:

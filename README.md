@@ -91,4 +91,4 @@ $ sudo kubectl delete po testngx-7f8646dbfd-n5cpf
 
 此时可以看到重建的 pod 进入 Pending 状态，进一步 describe，可以发现原因是节点资源不足，证明调度器插件工作正常。
 
-> tips: 要实现 Background 中所说的效果，还需要一个 Controller
+> tips: 要实现 Background 中所说的效果，还需要一个 [Controller](https://github.com/PyPotato/resource-reserving-controller)
